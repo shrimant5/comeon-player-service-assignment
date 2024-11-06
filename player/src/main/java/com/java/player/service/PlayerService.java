@@ -19,62 +19,47 @@ public class PlayerService {
     @Autowired
     private SessionRepository sessionRepository;
 
-    public Player registerPlayer(Player player) {
-        // You should hash the password here
-        return playerRepository.save(player);
-    }
+    @Autowired
+    private SessionService sessionService;
 
-    public Optional<Player> login(String email, String password) {
-        Optional<Player> playerOpt = playerRepository.findByEmail(email);
-        if (playerOpt.isPresent()) {
-            Player player = playerOpt.get();
-            if (player.getPassword().equals(password)) {
-                if (canLogin(player)) {
-                    // Create a session
-                    Session session = new Session();
-                    session.setPlayer(player);
-                    session.setLoginTime(LocalDateTime.now());
-                    sessionRepository.save(session);
+    public void registerPlayer(Player player) {
 
-                    player.setLastLoginDate(LocalDate.now());
-                    player.setActiveSessionDuration(0L); // Reset session duration
-                    return Optional.of(playerRepository.save(player));
-                }
-            }
+        if (playerRepository.findByEmail(player.getEmail()).isPresent()) {
+            throw new RuntimeException("Player with this email already exists.");
         }
-        return Optional.empty();
-    }
-
-    public boolean canLogin(Player player) {
-        return player.getActiveSessionDuration() < Player.DAILY_LIMIT;
-    }
-
-    public void logout(Long playerId) {
-        Optional<Player> playerOpt = playerRepository.findById(playerId);
-        if (playerOpt.isPresent()) {
-            // Mark session as logged out
-            // Additional logic to handle session
-        }
+        player.setPassword(player.getPassword());
+        playerRepository.save(player);
     }
 
     public void logout(Player player) {
-        Optional<Player> playerOpt = playerRepository.findById(player.getId());
-        if (playerOpt.isPresent()) {
+        Optional<Player> alreadyExistingPlayer = playerRepository.findById(player.getId());
+        if (alreadyExistingPlayer.isPresent()) {
             player.setActiveSessionDuration(0L); // Reset session duration
             playerRepository.save(player);
         }
     }
 
-    public void updateSessionDuration(Player player, long duration) {
-        player.setActiveSessionDuration(player.getActiveSessionDuration() + duration);
-        if (player.getActiveSessionDuration() >= Player.DAILY_LIMIT) {
-            logout(player);
-        }
-        playerRepository.save(player);
+    public Player getPlayerByEmail(String email) {
+        return playerRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Player not found"));
     }
 
-    public Optional<Player> getPlayerById(Long playerId) {
-        return playerRepository.findById(playerId);
+    // Validating the player
+    public boolean validatePlayerCredentials(String email, String password) {
+        Player player = getPlayerByEmail(email);
+        return player.getPassword().equals(password);
+    }
+
+    // Setting time limit for an active player
+    public void setTimeLimitForPlayer(Long playerId, Long timeLimit) {
+        Player player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new RuntimeException("Player not found"));
+
+        // Check if the player has an active session
+        if (player.getSession() == null || player.getSession().getLogoutTime() != null) {
+            throw new RuntimeException("Player must be active to set a time limit.");
+        }
+        sessionService.updateTimeLimit(player.getSession(), timeLimit);
     }
 }
 

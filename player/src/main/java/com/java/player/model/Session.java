@@ -12,11 +12,12 @@ public class Session {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    private Player player;
-
     private LocalDateTime loginTime;
     private LocalDateTime logoutTime;
-    private int timeLimit; // in minutes
+    private Long timeLimit;
+
+    @ManyToOne
+    @JoinColumn(name = "player_id")
+    private Player player;
 }
 

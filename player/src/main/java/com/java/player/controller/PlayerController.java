@@ -1,45 +1,57 @@
 package com.java.player.controller;
 
 import com.java.player.model.Player;
+import com.java.player.model.Session;
 import com.java.player.service.PlayerService;
+import com.java.player.service.SessionService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Optional;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/api/players")
 public class PlayerController {
     @Autowired
-    private PlayerService playerService;
+    PlayerService playerService;
+    @Autowired
+    SessionService sessionService;
 
     @PostMapping("/register")
-    public ResponseEntity<Player> register(@RequestBody Player player) {
-        return ResponseEntity.ok(playerService.registerPlayer(player));
+    public ResponseEntity<String> register(@RequestBody Player player) {
+        playerService.registerPlayer(player);
+        return new ResponseEntity<>("Player registered successfully", HttpStatus.CREATED);
     }
 
-    @PostMapping("/login")
-    public Optional<ResponseEntity<Player>> login(@RequestParam String email, @RequestParam String password) {
-        Optional<Player> playerOpt = playerService.login(email, password);
-        return playerOpt.map(ResponseEntity::ok);
-                // .orElseGet(() -> ResponseEntity.status(401).build());
-    }
+    @GetMapping("/login")
+    public ResponseEntity<String> login(@RequestParam String email, @RequestParam String password) {
 
-    @PostMapping("/logout/{playerId}")
-    public ResponseEntity<String> logout(@PathVariable Long playerId) {
-        Optional<Player> playerOpt = playerService.getPlayerById(playerId);
-        if (playerOpt.isPresent()) {
-            playerService.logout(playerOpt.get());
-            return ResponseEntity.ok("Logout successful!");
+        if (playerService.validatePlayerCredentials(email, password)) {
+            Player player = playerService.getPlayerByEmail(email);
+            Session session = sessionService.createSession(player);
+
+            // If the player has a time limit, we check it
+            sessionService.logoutIfTimeLimitExceeded(session);
+
+            return new ResponseEntity<>("Login successful. Session ID: " + session.getId(), HttpStatus.OK);
+        } else {
+            return new ResponseEntity<>("Invalid credentials", HttpStatus.UNAUTHORIZED);
         }
-        return ResponseEntity.status(404).body("Player not found.");
     }
 
-    @PostMapping("/set-time-limit")
-    public ResponseEntity<String> setTimeLimit(@RequestParam Long playerId, @RequestParam long limit) {
-        // Implement time limit setting logic if needed
-        return ResponseEntity.ok("Time limit set successfully.");
+    @GetMapping("/logout")
+    public ResponseEntity<String> logout(@RequestParam Long sessionId) {
+        sessionService.logout(sessionId);
+        return new ResponseEntity<>("Logout successful", HttpStatus.OK);
+    }
+
+    @GetMapping("/set-time-limit")
+    public ResponseEntity<String> setTimeLimit(@RequestParam Long playerId, @RequestParam String limit) {
+       // LocalDateTime timeLimit = LocalDateTime.parse(limit);
+        playerService.setTimeLimitForPlayer(playerId, Long.valueOf(limit));
+        return new ResponseEntity<>("Time limit set successfully", HttpStatus.OK);
     }
 }
 
